@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>凯京物流云定时任务管理</title>
+    <link type="text/css" rel="stylesheet" th:href="@{/plugins/bootstrap-3.3.7/css/bootstrap.min.css}"/>
+    <link type="text/css" rel="stylesheet" th:href="@{/plugins/bootstrap-3.3.7/plugins/table-1.11.1/bootstrap-table.min.css}"/>
+    <link type="text/css" rel="stylesheet" th:href="@{/plugins/bootstrap-3.3.7/plugins/table-1.11.1/extensions/sticky-header/bootstrap-table-sticky-header.css}"/>
+    <link type="text/css" rel="stylesheet" th:href="@{/plugins/bootstrap-3.3.7/plugins/datepicker/css/bootstrap-datepicker.min.css}"/>
+    <link type="text/css" rel="stylesheet" th:href="@{/plugins/artDialog4.1.7/skins/black.css}"/>
+    <style>
+        .console{
+            max-height:400px;
+            overflow-y:auto;
+            overflow-x:hidden;
+            font-family: "Courier New", Courier, "宋体", monospace;
+            font-size: 12px;
+        }
+        .console p{
+            line-height: 110%;
+            margin: 0;
+            padding-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+<input type="hidden" id="urlPath" th:value="${#httpServletRequest.getContextPath()}"/>
+<div class="container-fluid">
+    <div class="pull-right h3">
+        <span class="glyphicon glyphicon-user"></span> 欢迎您：
+        <span th:text="${@userLoginController.getDefaultUser()}"></span>&nbsp;&nbsp;
+        <a href="javascript:void(0)" id="logoutBtn">退出</a>
+    </div>
+    <div id="schedulerTableDiv" style="margin-top: 60px;">
+        <div id="toolbar">
+            <button id="addBtn" class="btn btn-primary">
+                <span class="glyphicon glyphicon-plus"></span> 新增
+            </button>
+            <button id="editBtn" class="btn btn-primary" disabled="disabled">
+                <span class="glyphicon glyphicon-pencil"></span> 修改
+            </button>
+            <button id="operateBtn" class="btn btn-primary" disabled="disabled">
+                <span class="glyphicon glyphicon-refresh"></span> 执行/暂停
+            </button>
+            <button id="removeBtn" class="btn btn-danger" disabled="disabled">
+                <span class="glyphicon glyphicon-remove"></span> 删除
+            </button>
+            <button id="runOnce" class="btn btn-primary" disabled="disabled" data-toggle="modal" data-target="#runOnceModal">
+                <span class="glyphicon glyphicon-play-circle"></span> 单次执行
+            </button>
+            <button class="btn btn-info" data-toggle="modal" data-target="#jobZoneModal" onclick="$('#runTimeZoneForm')[0].reset();"
+                    title="利润报表与发车与运输报表选择统计的时间段并执行这个作业">
+                <span class="glyphicon glyphicon-star"></span> [统计报表]批量执行
+            </button>
+            <button class="btn btn-success" data-toggle="modal" data-target="#logModal">
+                <span class="glyphicon glyphicon-bookmark"></span> 系统日志查看
+            </button>
+            <button class="btn btn-success" data-toggle="modal" data-target="#logDownloadModal">
+                <span class="glyphicon glyphicon-download"></span> 系统日志下载
+            </button>
+            <a class="btn btn-link" th:href="@{/druid/index.html}" role="button" target="_blank">
+                <span class="glyphicon glyphicon-link"></span> DB连接池监控
+            </a>
+            <a class="btn btn-link" th:href="@{/swagger-ui.html}" role="button" target="_blank">
+                <span class="glyphicon glyphicon-link"></span> RESTful API
+            </a>
+        </div>
+        <table id="schedulerTableBody"></table>
+    </div>
+    <div id="chartDiv" style="height:500px;width:100%;padding:10px;margin-top: 30px;"></div>
+</div>
+<div id="jobOperateModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="jobOperateModalTitle" data-backdrop="static" data-keyboard="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 id="jobOperateModalTitle" class="modal-title"><span id="tipName">-</span><small>&nbsp;(*为必填)</small></h4>
+            </div>
+            <div class="modal-body">
+                <form class="form-horizontal" id="schedulerConfigForm">
+                    <div class="form-group">
+                        <label for="jobName" class="col-sm-2 control-label"><span style="color: red;">*</span>作业名</label>
+                        <div class="col-sm-10">
+                            <input class="form-control" id="jobName" placeholder="请输入作业名"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobGroup" class="col-sm-2 control-label">作业组</label>
+                        <div class="col-sm-10">
+                            <input class="form-control" id="jobGroup" placeholder="请输入作业组，默认：DEFAULT_GROUP"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="cron" class="col-sm-2 control-label"><span style="color: red;">*</span>Cron</label>
+                        <div class="col-sm-10">
+                            <input class="form-control" id="cron" placeholder="请输入调度的Cron表达式"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="targetClass" class="col-sm-2 control-label"><span style="color: red;">*</span>作业类</label>
+                        <div class="col-sm-10">
+                            <input class="form-control" id="targetClass" placeholder="请输入作业类名(全路径)"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobDescription" class="col-sm-2 control-label">作业描述</label>
+                        <div class="col-sm-10">
+                            <input class="form-control" id="jobDescription" placeholder="请输入作业描述"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmails" class="col-sm-2 control-label">作业<span style="color: red;">异常</span>通知邮箱</label>
+                        <div class="col-sm-10">
+                            <textarea class="form-control" id="contactEmails" placeholder="请输入作业异常时发送邮件通知的邮箱列表，以分号分隔..." rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactEmails" class="col-sm-2 control-label">作业<span style="color: green;">完成</span>通知邮箱</label>
+                        <div class="col-sm-10">
+                            <textarea class="form-control" id="successEmails" placeholder="请输入作业执行完成后通知的邮箱列表，以分号分隔..." rows="2"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="submitBtn">确认</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="jobZoneModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="jobZoneModalTitle" data-backdrop="static" data-keyboard="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 id="jobZoneModalTitle" class="modal-title">相关统计报表的统计时间段<small>&nbsp;(*为必填)</small></h4>
+            </div>
+            <div class="modal-body">
+                <form class="form-horizontal" id="runTimeZoneForm">
+                    <div class="form-group">
+                        <label for="startDate" class="col-sm-2 control-label"><span style="color: red;">*</span>开始日期</label>
+                        <div class="col-sm-10">
+                            <input class="form-control input-append date form_datetime" id="startDate" placeholder="请选择统计开始日期" readonly="readonly"/>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate" class="col-sm-2 control-label"><span style="color: red;">*</span>结束日期</label>
+                        <div class="col-sm-10">
+                            <input class="form-control input-append date form_datetime" id="endDate" placeholder="请选择统计结束日期" readonly="readonly"/>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="runZoneBtnProfit">利润报表</button>
+                <button type="button" class="btn btn-primary" id="runZoneBtn">发车与运输报表</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="runOnceModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="runOnceModalTitle" data-backdrop="static" data-keyboard="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 id="runOnceModalTitle" class="modal-title">系统提示<small>&nbsp;(*为必填)</small></h4>
+            </div>
+            <div class="modal-body">
+                <form class="form-horizontal" id="runOnceZoneForm">
+                    <div class="form-group">
+                        <label for="statisticsDate" class="col-sm-2 control-label"><span style="color: red;">*</span>处理日期</label>
+                        <div class="col-sm-10">
+                            <input class="form-control input-append date form_datetime" id="statisticsDate" placeholder="请选择处理日期" readonly="readonly"/>
+                            <p class="help-block">如发车与运输报表需要指定统计日期，则后台只统计此日期的数据</p>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="runOnceBtn">确认</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="logModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="logModalTitle" data-backdrop="static" data-keyboard="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 id="logModalTitle" class="modal-title">日志详情&nbsp;<small id="logDate">-</small></h4>
+            </div>
+            <div class="modal-body console" id="logContent"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="logDownloadModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="logDownloadModalTitle" data-backdrop="static" data-keyboard="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 id="logDownloadModalTitle" class="modal-title">系统提示<small>&nbsp;(*为必填)</small></h4>
+            </div>
+            <div class="modal-body">
+                <form class="form-horizontal" id="logDownloadForm">
+                    <div class="form-group">
+                        <label for="logDownloadDate" class="col-sm-2 control-label"><span style="color: red;">*</span>日志日期</label>
+                        <div class="col-sm-10">
+                            <input class="form-control input-append date form_datetime" id="logDownloadDate" placeholder="请选择日志日期" readonly="readonly"/>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="logDownloadBtn">下载</button>
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript" th:src="@{/plugins/jquery-1.10.2.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/websocket/sockjs.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/websocket/stomp.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/js/bootstrap.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/plugins/table-1.11.1/bootstrap-table.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/plugins/table-1.11.1/locale/bootstrap-table-zh-CN.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/plugins/table-1.11.1/extensions/sticky-header/bootstrap-table-sticky-header.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/plugins/datepicker/js/bootstrap-datepicker.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/bootstrap-3.3.7/plugins/datepicker/locales/bootstrap-datepicker.zh-CN.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/artDialog4.1.7/artDialog.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/artDialog4.1.7/jquery.artDialog.extend.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/echarts-3.7.2/echarts.min.js}"></script>
+<script type="text/javascript" th:src="@{/plugins/echarts-3.7.2/shine.js}"></script>
+<script type="text/javascript" th:src="@{/js/scheduler.js}"></script>
+</body>
+</html>
